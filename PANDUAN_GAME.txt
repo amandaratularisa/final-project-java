@@ -1,0 +1,100 @@
+============================================
+PANDUAN INSTALASI & FITUR "PIXEL HEROES"
+============================================
+
+1. PRASYARAT SOFTWARE
+----------------------
+- Java JDK 17+ terpasang dan JAVA_HOME sudah diset.
+- JavaFX SDK 21 sudah diekstrak, default path yang digunakan skrip: C:\\javafx-sdk-21.0.9\\lib.
+- MySQL Server (atau kompatibel) berjalan secara lokal dan bisa diakses oleh aplikasi.
+- Driver MySQL (mysql-connector-j-9.5.0.jar) sudah tersedia di folder lib/ (sudah termasuk di repo).
+
+2. MENYIAPKAN DATABASE
+-----------------------
+Disarankan memakai database agar login, leaderboard, dan penyimpanan karakter aktif penuh. Langkah rapihnya:
+  1. Buat database baru di MySQL, contoh nama `pixel_heroes` (pastikan konsisten dengan konfigurasi).
+  2. Eksekusi skrip skema:
+        - `database_setup.sql` → struktur inti.
+        - `database_setup_fixed.sql` → versi terbaru (rekomendasi).
+     Jalankan via MySQL Workbench atau terminal:
+        `mysql -u root -p pixel_heroes < database_setup_fixed.sql`
+  3. Sesuaikan kredensial di `DatabaseManager` (src/main/java/com/game/mario/DatabaseManager.java) dengan server teman Anda (host, port, nama DB, user, password).
+  4. Jika MySQL tidak tersedia, game otomatis memakai mode file (data tersimpan di `playerdata.sav`), tetapi fitur multi-user & leaderboard akan terbatas.
+
+3. MENYIAPKAN ASSET & AUDIO
+----------------------------
+Semua aset ada di folder `assets/`. Struktur wajib:
+
+```
+assets/
+ ├─ characters/
+ ├─ enemies/
+ ├─ platforms/
+ ├─ backgrounds/
+ ├─ ui/
+ ├─ effects/
+ └─ items/
+```
+
+### 3.1 Prioritas Tinggi (wajib ada)
+- **characters/** → minimal `player_idle.png` (40x50px). Tambahan animasi `player_walk1.png`, `player_walk2.png`, `player_jump.png` membuat gerakan lebih halus.
+- **enemies/** → `enemy_idle.png` + frame jalan (40x40px).
+- **platforms/** → `platform_ground.png` (50x50px), `platform_floating.png` (50x20px).
+- **items/** → `coin.png` (30x30px) dan `heart.png` opsional.
+- **backgrounds/** → `area1_background.png`, `area2_background.png` (1200x700px).
+
+### 3.2 Prioritas Sedang (opsional tapi bagus)
+- **ui/** untuk tombol & panel (300x60px untuk tombol, 200x30px untuk health bar).
+- **effects/** untuk spark, smoke, star, explosion.
+
+### 3.3 Tips Asset
+- Format PNG transparan.
+- Orientasi karakter menghadap kanan.
+- Platform harus seamless.
+- Gunakan gaya konsisten (pixel art / cartoon).
+
+### 3.4 Audio Files (assets/audio/)
+- `backsound_menu.wav` → musik latar loop.
+- `jump.wav`, `coin.wav`, `stomp_enemy.wav`, `boss_hit.wav`, `level_clear.wav` → efek suara.
+
+Jika nama/format berbeda, sesuaikan path di `AudioManager`.
+
+4. MEMBANGUN & MENJALANKAN GAME
+--------------------------------
+**Opsi A (Batch file)**
+  1. `build.bat` → compile ke folder `out/` (sudah otomatis menambahkan modul javafx.media).
+  2. `run.bat` → menjalankan game.
+  3. Pastikan `JAVAFX_PATH` di kedua skrip menunjuk ke JavaFX SDK yang benar (default `C:\javafx-sdk-21.0.9\lib`). Bila belum punya, download JavaFX SDK dari https://openjfx.io/, ekstrak, lalu set path tersebut.
+
+**Opsi B (Quick start)**
+  - `quick-start.bat` → compile & run sekali jalan (juga butuh `JAVAFX_PATH`).
+
+**Opsi C (Maven)**
+  - Jalankan `mvn clean javafx:run` (pom sudah memuat dependency controls/graphics/media).
+
+5. FITUR-FITUR UTAMA GAME
+--------------------------
+  - **Login & Pembuatan Karakter**: Buat akun baru atau muat karakter dari database/file.
+  - **Main Menu Modern**: Latar neon + musik latar, tombol shop, leaderboard, start game, logout.
+  - **Leaderboard**: Menarik top 10 pemain berdasarkan skor tertinggi.
+  - **Character Shop**: Membeli & mengganti skin, status owned/equipped tersimpan.
+  - **Story Mode**: 10 level dengan narasi neon city (Light Realm & Shadow Realm).
+  - **Gameplay Platformer**:
+      * Level 1-4: Light Realm mudah.
+      * Level 5: Boss Tower (Prism Warden).
+      * Level 6-9: Shadow Realm ground lebar (mudah dimainkan).
+      * Level 10: Boss final Shadow Lord.
+  - **Enemy & Boss Systems**: Musuh bisa diinjak, boss punya HP bar, proyektil, weapon drop.
+  - **Coin & Weapon Systems**: Koin menambah total global; weapon drop membantu lawan boss.
+  - **Audio Lengkap**: Musik looping + efek lompat/koin/stomp/boss hit/level clear.
+  - **HUD & Game Over**: HUD koin, level, heart, boss HP; layout game over/victory sudah rapi.
+  - **Progress Tracking**: Koin total, high score, level progress tersimpan di DB/file; shop memakai data sama.
+
+6. TIPS BERBAGI DENGAN TEMAN
+-----------------------------
+- Sertakan seluruh folder proyek (assets, lib, src, out) + `playerdata.sav` jika ingin membawa progres file.
+- Jelaskan cara menjalankan skrip SQL sebelum membuka game agar data awal tersedia.
+- Pastikan teman menyesuaikan credential MySQL sesuai PC mereka.
+- Bila ingin memulai profil baru tanpa DB, hapus/rename `playerdata.sav` sehingga game membuat karakter baru lokal.
+
+Dengan mengikuti panduan lengkap ini, Pixel Heroes akan berjalan normal dan semua fitur (musik, efek, shop, leaderboard, boss battle) bisa dinikmati sepenuhnya.
