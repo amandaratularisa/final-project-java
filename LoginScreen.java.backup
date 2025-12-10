@@ -1,0 +1,221 @@
+﻿package com.game.mario;
+
+import javafx.scene.Parent;
+import javafx.scene.canvas.Canvas;
+import javafx.scene.canvas.GraphicsContext;
+import javafx.scene.layout.Pane;
+import javafx.scene.paint.Color;
+import javafx.scene.paint.LinearGradient;
+import javafx.scene.text.Font;
+import javafx.scene.text.FontWeight;
+import javafx.stage.Stage;
+import javafx.scene.Scene;
+import javafx.animation.AnimationTimer;
+import javafx.scene.control.TextInputDialog;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Optional;
+import java.util.Random;
+
+public class LoginScreen {
+    private Canvas canvas;
+    private GraphicsContext gc;
+    private Stage stage;
+    private int width, height;
+    private AnimationTimer menuLoop;
+    private double titlePulse = 0;
+    private List<VisualEffects.Star> stars;
+    private List<VisualEffects.Cloud> clouds;
+    private List<VisualEffects.Particle> particles;
+    private Random random = new Random();
+    private double time = 0;
+    
+    private CustomButton loginButton;
+    private CustomButton registerButton;
+    private CustomButton exitButton;
+    
+    private Pane root;
+    private ImageManager imageManager;
+    private javafx.scene.image.Image backgroundImage;
+    
+    public LoginScreen(Stage stage, int width, int height) {
+        this.stage = stage;
+        this.width = width;
+        this.height = height;
+        this.canvas = new Canvas(width, height);
+        this.gc = canvas.getGraphicsContext2D();
+        this.imageManager = ImageManager.getInstance();
+        this.backgroundImage = imageManager.getImage("ui/opening_background");
+        
+        initParticles();
+        initButtons();
+        
+        menuLoop = new AnimationTimer() {
+            @Override
+            public void handle(long now) {
+                render();
+            }
+        };
+        menuLoop.start();
+    }
+    
+    private void initParticles() {
+        stars = new ArrayList<>();
+        for (int i = 0; i < 150; i++) {
+            stars.add(new VisualEffects.Star(random.nextDouble() * width, random.nextDouble() * height));
+        }
+        
+        clouds = new ArrayList<>();
+        for (int i = 0; i < 6; i++) {
+            clouds.add(new VisualEffects.Cloud(random.nextDouble() * width, 30 + random.nextDouble() * 120, width));
+        }
+        
+        particles = new ArrayList<>();
+    }
+    
+    private void initButtons() {
+        double buttonWidth = 300;
+        double buttonHeight = 60;
+        double centerX = (width - buttonWidth) / 2;
+        double startY = 350;
+        double spacing = 80;
+        
+        loginButton = new CustomButton(centerX, startY, buttonWidth, buttonHeight, "LOGIN", 
+            Color.rgb(70, 180, 100));
+        loginButton.setOnClick(this::handleLogin);
+        
+        registerButton = new CustomButton(centerX, startY + spacing, buttonWidth, buttonHeight, "REGISTER", 
+            Color.rgb(70, 130, 220));
+        registerButton.setOnClick(this::handleRegister);
+        
+        exitButton = new CustomButton(centerX, startY + spacing * 2, buttonWidth, buttonHeight, "EXIT", 
+            Color.rgb(200, 70, 70));
+        exitButton.setOnClick(() -> System.exit(0));
+    }
+    
+    private void render() {
+        time += 0.05;
+        
+        // AUTO-DETECT: Pakai gambar opening kalau ada, kalau tidak pakai gradient
+        if (backgroundImage != null && !backgroundImage.isError() && backgroundImage.getProgress() >= 1.0) {
+            gc.drawImage(backgroundImage, 0, 0, width, height);
+        } else {
+            LinearGradient skyGradient = VisualEffects.createSkyGradient(height);
+            gc.setFill(skyGradient);
+            gc.fillRect(0, 0, width, height);
+            
+            for (VisualEffects.Star star : stars) {
+                star.draw(gc, time);
+            }
+            
+            for (VisualEffects.Cloud cloud : clouds) {
+                cloud.update();
+                cloud.draw(gc);
+            }
+        }
+        
+        particles.removeIf(p -> !p.isAlive());
+        for (VisualEffects.Particle p : particles) {
+            p.update();
+            p.draw(gc);
+        }
+        
+        if (random.nextInt(100) < 5) {
+            particles.add(new VisualEffects.Particle(
+                random.nextDouble() * width, 
+                random.nextDouble() * height, 
+                Color.rgb(255, 215, 0, 0.8)
+            ));
+        }
+        
+        renderMenu();
+    }
+    
+    private void renderMenu() {
+        titlePulse += 0.05;
+        double scale = 1.0 + Math.sin(titlePulse) * 0.08;
+        
+        Font titleFont = Font.font("Arial", FontWeight.BOLD, 60 * scale);
+        VisualEffects.drawGlowText(gc, "SUPER ADVENTURE HERO", 100, 150, 
+            titleFont, Color.rgb(255, 215, 0), Color.rgb(255, 140, 0, 0.6));
+        
+        Font subtitleFont = Font.font("Arial", FontWeight.NORMAL, 28);
+        VisualEffects.drawGlowText(gc, "Welcome! Please Login or Register", 280, 210, 
+            subtitleFont, Color.rgb(230, 230, 250), Color.rgb(100, 100, 200, 0.5));
+        
+        gc.setFill(Color.rgb(50, 50, 80, 0.7));
+        gc.fillRoundRect(300, 280, 600, 340, 30, 30);
+        
+        gc.setStroke(Color.rgb(150, 150, 200));
+        gc.setLineWidth(3);
+        gc.strokeRoundRect(300, 280, 600, 340, 30, 30);
+        
+        loginButton.draw(gc);
+        registerButton.draw(gc);
+        exitButton.draw(gc);
+        
+        VisualEffects.drawGlowText(gc, "Created with JavaFX", 460, height - 30, 
+            Font.font("Arial", FontWeight.NORMAL, 18), 
+            Color.rgb(255, 215, 0), Color.rgb(200, 150, 0, 0.5));
+    }
+    
+    private void handleLogin() {
+        TextInputDialog dialog = new TextInputDialog();
+        dialog.setTitle("Login");
+        dialog.setHeaderText("Enter your username");
+        dialog.setContentText("Username:");
+        
+        Optional<String> result = dialog.showAndWait();
+        result.ifPresent(username -> {
+            if (username != null && !username.trim().isEmpty()) {
+                PlayerData playerData = PlayerData.load(username.trim());
+                goToMainMenu(playerData);
+            }
+        });
+    }
+    
+    private void handleRegister() {
+        TextInputDialog dialog = new TextInputDialog();
+        dialog.setTitle("Register");
+        dialog.setHeaderText("Create a new account");
+        dialog.setContentText("Username:");
+        
+        Optional<String> result = dialog.showAndWait();
+        result.ifPresent(username -> {
+            if (username != null && !username.trim().isEmpty()) {
+                PlayerData playerData = new PlayerData(username.trim());
+                playerData.save();
+                goToMainMenu(playerData);
+            }
+        });
+    }
+    
+    private void goToMainMenu(PlayerData playerData) {
+        menuLoop.stop();
+        MainMenuScreen mainMenu = new MainMenuScreen(stage, width, height, playerData);
+        Scene menuScene = new Scene(mainMenu.getRoot(), width, height);
+        stage.setScene(menuScene);
+        menuScene.getRoot().requestFocus();
+    }
+    
+    public Parent getRoot() {
+        root = new Pane();
+        root.getChildren().add(canvas);
+        root.setFocusTraversable(true);
+        
+        root.setOnMouseMoved(e -> {
+            loginButton.checkHover(e.getX(), e.getY());
+            registerButton.checkHover(e.getX(), e.getY());
+            exitButton.checkHover(e.getX(), e.getY());
+        });
+        
+        root.setOnMouseClicked(e -> {
+            loginButton.handleClick(e.getX(), e.getY());
+            registerButton.handleClick(e.getX(), e.getY());
+            exitButton.handleClick(e.getX(), e.getY());
+        });
+        
+        return root;
+    }
+}
+

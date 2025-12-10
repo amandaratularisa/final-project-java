@@ -1,0 +1,396 @@
+package com.game.mario;
+
+import javafx.animation.AnimationTimer;
+import javafx.scene.Parent;
+import javafx.scene.canvas.Canvas;
+import javafx.scene.canvas.GraphicsContext;
+import javafx.scene.input.KeyCode;
+import javafx.scene.layout.Pane;
+import javafx.scene.paint.Color;
+import javafx.scene.paint.LinearGradient;
+import javafx.scene.text.Font;
+import javafx.scene.text.FontWeight;
+import javafx.stage.Stage;
+import javafx.scene.Scene;
+
+import java.util.ArrayList;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Set;
+
+public class GameController {
+    private Canvas canvas;
+    private GraphicsContext gc;
+    private Player player;
+    private GameLevel currentLevel;
+    private StoryManager storyManager;
+    private AnimationTimer gameLoop;
+    private Set<KeyCode> pressedKeys;
+    private Stage stage;
+    private int currentLevelNumber = 1;
+    private boolean showingStory = true;
+    private StoryManager.StorySegment currentStory;
+    private boolean gameWon = false;
+    private boolean gameOver = false;
+    private List<VisualEffects.Cloud> clouds;
+    private List<VisualEffects.Particle> particles;
+    private double time = 0;
+    
+    public GameController(Stage stage, int width, int height) {
+        this.stage = stage;
+        this.canvas = new Canvas(width, height);
+        this.gc = canvas.getGraphicsContext2D();
+        this.pressedKeys = new HashSet<>();
+        this.storyManager = new StoryManager();
+        
+        initGame();
+    }
+    
+    private void initGame() {
+        player = new Player(50, 500);
+        currentLevel = new GameLevel(currentLevelNumber);
+        currentStory = storyManager.getStoryForLevel(currentLevelNumber);
+        
+        clouds = new ArrayList<>();
+        particles = new ArrayList<>();
+        java.util.Random random = new java.util.Random();
+        for (int i = 0; i < 4; i++) {
+            clouds.add(new VisualEffects.Cloud(random.nextDouble() * canvas.getWidth(), 
+                                                30 + random.nextDouble() * 100, 
+                                                (int)canvas.getWidth()));
+        }
+        
+        gameLoop = new AnimationTimer() {
+            @Override
+            public void handle(long now) {
+                update();
+                render();
+            }
+        };
+    }
+    
+    private void update() {
+        if (showingStory) return;
+        
+        if (gameWon) return;
+        
+        if (gameOver) return;
+        
+        if (!player.isAlive()) {
+            gameOver = true;
+            return;
+        }
+        
+        if (pressedKeys.contains(KeyCode.LEFT)) {
+            player.moveLeft();
+        }
+        if (pressedKeys.contains(KeyCode.RIGHT)) {
+            player.moveRight();
+        }
+        if (pressedKeys.contains(KeyCode.SPACE)) {
+            player.jump();
+        }
+        
+        player.update();
+        currentLevel.handleCollisions(player);
+        
+        for (Enemy enemy : currentLevel.getEnemies()) {
+            enemy.update();
+        }
+        
+        for (VisualEffects.Cloud cloud : clouds) {
+            cloud.update();
+        }
+        
+        particles.removeIf(p -> !p.isAlive());
+        for (VisualEffects.Particle p : particles) {
+            p.update();
+        }
+        
+        if (currentLevel.isLevelComplete(player)) {
+            if (currentLevelNumber < 3) {
+                nextLevel();
+            } else {
+                winGame();
+            }
+        }
+        
+        time += 0.05;
+    }
+    
+    private void render() {
+        LinearGradient skyGradient = VisualEffects.createGameSkyGradient(canvas.getHeight());
+        gc.setFill(skyGradient);
+        gc.fillRect(0, 0, canvas.getWidth(), canvas.getHeight());
+        
+        if (showingStory) {
+            renderStory();
+            return;
+        }
+        
+        if (gameOver) {
+            renderGameOver();
+            return;
+        }
+        
+        if (gameWon) {
+            renderVictory();
+            return;
+        }
+        
+        for (VisualEffects.Cloud cloud : clouds) {
+            cloud.draw(gc);
+        }
+        
+        for (Platform platform : currentLevel.getPlatforms()) {
+            platform.draw(gc);
+        }
+        
+        for (Enemy enemy : currentLevel.getEnemies()) {
+            enemy.draw(gc);
+        }
+        
+        player.draw(gc);
+        
+        for (VisualEffects.Particle p : particles) {
+            p.draw(gc);
+        }
+        
+        gc.setFill(Color.rgb(50, 255, 50, 0.4));
+        gc.fillRect(currentLevel.getFinishLineX() - 15, 0, 30, canvas.getHeight());
+        
+        gc.setStroke(Color.rgb(0, 255, 0));
+        gc.setLineWidth(5);
+        gc.strokeLine(currentLevel.getFinishLineX(), 0, currentLevel.getFinishLineX(), canvas.getHeight());
+        
+        gc.setStroke(Color.rgb(255, 255, 255, 0.7));
+        gc.setLineWidth(2);
+        gc.strokeLine(currentLevel.getFinishLineX() - 10, 0, currentLevel.getFinishLineX() - 10, canvas.getHeight());
+        gc.strokeLine(currentLevel.getFinishLineX() + 10, 0, currentLevel.getFinishLineX() + 10, canvas.getHeight());
+        
+        renderHUD();
+    }
+    
+    private void renderStory() {
+        gc.setFill(Color.rgb(0, 0, 0, 0.9));
+        gc.fillRect(0, 0, canvas.getWidth(), canvas.getHeight());
+        
+        Font titleFont = Font.font("Arial", FontWeight.BOLD, 40);
+        VisualEffects.drawGlowText(gc, currentStory.getTitle(), 50, 90, 
+            titleFont, Color.GOLD, Color.rgb(255, 140, 0, 0.7));
+        
+        gc.setFill(Color.rgb(40, 40, 60, 0.8));
+        gc.fillRoundRect(30, 130, canvas.getWidth() - 60, 480, 25, 25);
+        
+        gc.setStroke(Color.rgb(150, 120, 200));
+        gc.setLineWidth(2);
+        gc.strokeRoundRect(30, 130, canvas.getWidth() - 60, 480, 25, 25);
+        
+        gc.setFill(Color.rgb(230, 230, 250));
+        gc.setFont(Font.font("Arial", FontWeight.NORMAL, 22));
+        
+        String[] lines = currentStory.getText().split("\n");
+        int yPos = 180;
+        for (String line : lines) {
+            gc.fillText(line, 70, yPos);
+            yPos += 40;
+        }
+        
+        double pulse = Math.abs(Math.sin(time * 2));
+        Font promptFont = Font.font("Arial", FontWeight.BOLD, 26);
+        VisualEffects.drawGlowText(gc, "Press ENTER to continue...", 50, canvas.getHeight() - 50, 
+            promptFont, Color.rgb(100, 255, 255), Color.rgb(50, 200, 255, pulse));
+    }
+    
+    private void renderVictory() {
+        gc.setFill(Color.rgb(0, 20, 0, 0.95));
+        gc.fillRect(0, 0, canvas.getWidth(), canvas.getHeight());
+        
+        java.util.Random random = new java.util.Random((long)(time * 100));
+        for (int i = 0; i < 50; i++) {
+            double x = random.nextDouble() * canvas.getWidth();
+            double y = random.nextDouble() * canvas.getHeight();
+            double size = 2 + random.nextDouble() * 3;
+            gc.setFill(Color.rgb(255, 215, 0, 0.3 + random.nextDouble() * 0.7));
+            gc.fillOval(x, y, size, size);
+        }
+        
+        StoryManager.StorySegment victory = storyManager.getVictory();
+        
+        Font titleFont = Font.font("Arial", FontWeight.BOLD, 56);
+        VisualEffects.drawGlowText(gc, victory.getTitle(), canvas.getWidth() / 2 - 200, 100, 
+            titleFont, Color.GOLD, Color.rgb(255, 215, 0, 0.8));
+        
+        gc.setFill(Color.rgb(20, 50, 20, 0.85));
+        gc.fillRoundRect(30, 150, canvas.getWidth() - 60, 450, 30, 30);
+        
+        gc.setStroke(Color.rgb(100, 255, 100));
+        gc.setLineWidth(3);
+        gc.strokeRoundRect(30, 150, canvas.getWidth() - 60, 450, 30, 30);
+        
+        gc.setFill(Color.rgb(230, 250, 230));
+        gc.setFont(Font.font("Arial", FontWeight.NORMAL, 22));
+        
+        String[] lines = victory.getText().split("\n");
+        int yPos = 210;
+        for (String line : lines) {
+            gc.fillText(line, 70, yPos);
+            yPos += 45;
+        }
+        
+        gc.setFill(Color.rgb(40, 80, 40, 0.9));
+        gc.fillRoundRect(70, yPos + 20, 300, 60, 20, 20);
+        
+        gc.setStroke(Color.rgb(255, 215, 0));
+        gc.setLineWidth(2);
+        gc.strokeRoundRect(70, yPos + 20, 300, 60, 20, 20);
+        
+        Font coinsFont = Font.font("Arial", FontWeight.BOLD, 30);
+        VisualEffects.drawGlowText(gc, "Total Coins: " + player.getCoins(), 90, yPos + 60, 
+            coinsFont, Color.rgb(255, 215, 0), Color.rgb(255, 140, 0, 0.6));
+        
+        double pulse = Math.abs(Math.sin(time * 2));
+        Font promptFont = Font.font("Arial", FontWeight.BOLD, 24);
+        VisualEffects.drawGlowText(gc, "Press ENTER or ESC to return to menu", 50, canvas.getHeight() - 40, 
+            promptFont, Color.rgb(150, 255, 150), Color.rgb(100, 200, 100, pulse));
+    }
+    
+    private void renderHUD() {
+        gc.setFill(Color.rgb(20, 20, 40, 0.85));
+        gc.fillRoundRect(10, 10, 250, 120, 15, 15);
+        
+        gc.setStroke(Color.rgb(100, 100, 200));
+        gc.setLineWidth(2);
+        gc.strokeRoundRect(10, 10, 250, 120, 15, 15);
+        
+        Font hudFont = Font.font("Arial", FontWeight.BOLD, 22);
+        
+        gc.setFill(Color.rgb(100, 200, 255));
+        gc.setFont(hudFont);
+        gc.fillText("Level: " + currentLevelNumber, 25, 40);
+        
+        gc.setFill(Color.rgb(255, 100, 100));
+        gc.fillText("Health: ", 25, 70);
+        
+        double healthBarWidth = 120;
+        double healthPercent = player.getHealth() / 100.0;
+        
+        gc.setFill(Color.rgb(60, 0, 0));
+        gc.fillRoundRect(120, 55, healthBarWidth, 20, 10, 10);
+        
+        Color healthColor = healthPercent > 0.5 ? Color.rgb(0, 255, 0) : 
+                           healthPercent > 0.25 ? Color.rgb(255, 255, 0) : Color.rgb(255, 0, 0);
+        gc.setFill(healthColor);
+        gc.fillRoundRect(120, 55, healthBarWidth * healthPercent, 20, 10, 10);
+        
+        gc.setStroke(Color.rgb(255, 255, 255, 0.5));
+        gc.setLineWidth(1);
+        gc.strokeRoundRect(120, 55, healthBarWidth, 20, 10, 10);
+        
+        gc.setFill(Color.rgb(255, 215, 0));
+        gc.setFont(hudFont);
+        gc.fillText("Coins: " + player.getCoins(), 25, 105);
+        
+        gc.setFill(Color.rgb(255, 215, 0));
+        gc.fillOval(150, 90, 15, 15);
+        
+        gc.setStroke(Color.rgb(255, 140, 0));
+        gc.setLineWidth(2);
+        gc.strokeOval(150, 90, 15, 15);
+    }
+    
+    private void renderGameOver() {
+        gc.setFill(Color.rgb(20, 0, 0, 0.95));
+        gc.fillRect(0, 0, canvas.getWidth(), canvas.getHeight());
+        
+        Font gameOverFont = Font.font("Arial", FontWeight.BOLD, 80);
+        VisualEffects.drawGlowText(gc, "GAME OVER", canvas.getWidth() / 2 - 280, canvas.getHeight() / 2 - 50, 
+            gameOverFont, Color.rgb(255, 50, 50), Color.rgb(200, 0, 0, 0.8));
+        
+        gc.setFill(Color.rgb(80, 20, 20, 0.8));
+        gc.fillRoundRect(canvas.getWidth() / 2 - 300, canvas.getHeight() / 2 + 20, 600, 100, 25, 25);
+        
+        gc.setStroke(Color.rgb(255, 100, 100));
+        gc.setLineWidth(3);
+        gc.strokeRoundRect(canvas.getWidth() / 2 - 300, canvas.getHeight() / 2 + 20, 600, 100, 25, 25);
+        
+        Font promptFont = Font.font("Arial", FontWeight.BOLD, 26);
+        double pulse = Math.abs(Math.sin(time * 2));
+        VisualEffects.drawGlowText(gc, "Press ENTER or ESC to return to menu", 
+            canvas.getWidth() / 2 - 270, canvas.getHeight() / 2 + 85, 
+            promptFont, Color.rgb(255, 200, 200), Color.rgb(255, 100, 100, pulse));
+    }
+    
+    private void returnToMenu() {
+        stop();
+        MenuScreen menu = new MenuScreen(stage, (int)canvas.getWidth(), (int)canvas.getHeight());
+        Scene menuScene = new Scene(menu.getRoot(), canvas.getWidth(), canvas.getHeight());
+        stage.setScene(menuScene);
+        menuScene.getRoot().requestFocus();
+    }
+    
+    private void nextLevel() {
+        currentLevelNumber++;
+        player = new Player(50, 500);
+        player.collectCoin();
+        for (int i = 0; i < currentLevel.getPlatforms().size(); i++) {
+            if (currentLevel.getPlatforms().get(i).getType() == Platform.PlatformType.COIN) {
+                player.collectCoin();
+            }
+        }
+        currentLevel = new GameLevel(currentLevelNumber);
+        currentStory = storyManager.getStoryForLevel(currentLevelNumber);
+        showingStory = true;
+    }
+    
+    private void winGame() {
+        gameWon = true;
+        showingStory = false;
+        for (int i = 0; i < 100; i++) {
+            java.util.Random random = new java.util.Random();
+            particles.add(new VisualEffects.Particle(
+                random.nextDouble() * canvas.getWidth(),
+                random.nextDouble() * canvas.getHeight(),
+                Color.GOLD
+            ));
+        }
+    }
+    
+    public void start() {
+        gameLoop.start();
+    }
+    
+    public void stop() {
+        if (gameLoop != null) {
+            gameLoop.stop();
+        }
+    }
+    
+    public Parent getRoot() {
+        Pane root = new Pane();
+        root.getChildren().add(canvas);
+        root.setFocusTraversable(true);
+        
+        root.setOnKeyPressed(e -> {
+            pressedKeys.add(e.getCode());
+            
+            if (e.getCode() == KeyCode.ENTER && showingStory) {
+                showingStory = false;
+            }
+            
+            if (e.getCode() == KeyCode.ENTER && (gameOver || gameWon)) {
+                returnToMenu();
+            }
+            
+            if (e.getCode() == KeyCode.ESCAPE) {
+                returnToMenu();
+            }
+        });
+        
+        root.setOnKeyReleased(e -> {
+            pressedKeys.remove(e.getCode());
+        });
+        
+        return root;
+    }
+}

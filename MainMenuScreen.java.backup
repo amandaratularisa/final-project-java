@@ -1,0 +1,308 @@
+﻿package com.game.mario;
+
+import javafx.scene.Parent;
+import javafx.scene.canvas.Canvas;
+import javafx.scene.canvas.GraphicsContext;
+import javafx.scene.layout.Pane;
+import javafx.scene.paint.Color;
+import javafx.scene.paint.LinearGradient;
+import javafx.scene.text.Font;
+import javafx.scene.text.FontWeight;
+import javafx.stage.Stage;
+import javafx.scene.Scene;
+import javafx.animation.AnimationTimer;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Random;
+
+public class MainMenuScreen {
+    private Canvas canvas;
+    private GraphicsContext gc;
+    private Stage stage;
+    private int width, height;
+    private PlayerData playerData;
+    private AnimationTimer menuLoop;
+    private double titlePulse = 0;
+    private List<VisualEffects.Star> stars;
+    private List<VisualEffects.Cloud> clouds;
+    private List<VisualEffects.Particle> particles;
+    private Random random = new Random();
+    private double time = 0;
+    
+    private CustomButton playButton;
+    private CustomButton shopButton;
+    private CustomButton profileButton;
+    private CustomButton logoutButton;
+    
+    private Pane root;
+    private boolean showingIntro = false;
+    private ImageManager imageManager;
+    private javafx.scene.image.Image backgroundImage;
+    private StoryManager storyManager;
+    
+    public MainMenuScreen(Stage stage, int width, int height, PlayerData playerData) {
+        this.stage = stage;
+        this.width = width;
+        this.height = height;
+        this.playerData = playerData;
+        this.canvas = new Canvas(width, height);
+        this.gc = canvas.getGraphicsContext2D();
+        this.storyManager = new StoryManager();
+        this.imageManager = ImageManager.getInstance();
+        this.backgroundImage = imageManager.getImage("ui/opening_background");
+        
+        initParticles();
+        initButtons();
+        
+        menuLoop = new AnimationTimer() {
+            @Override
+            public void handle(long now) {
+                render();
+            }
+        };
+        menuLoop.start();
+    }
+    
+    private void initParticles() {
+        stars = new ArrayList<>();
+        for (int i = 0; i < 150; i++) {
+            stars.add(new VisualEffects.Star(random.nextDouble() * width, random.nextDouble() * height));
+        }
+        
+        clouds = new ArrayList<>();
+        for (int i = 0; i < 6; i++) {
+            clouds.add(new VisualEffects.Cloud(random.nextDouble() * width, 30 + random.nextDouble() * 120, width));
+        }
+        
+        particles = new ArrayList<>();
+    }
+    
+    private void initButtons() {
+        double buttonWidth = 350;
+        double buttonHeight = 60;
+        double centerX = (width - buttonWidth) / 2;
+        double startY = 320;
+        double spacing = 75;
+        
+        playButton = new CustomButton(centerX, startY, buttonWidth, buttonHeight, "PLAY GAME", 
+            Color.rgb(70, 180, 100));
+        playButton.setOnClick(this::handlePlay);
+        
+        shopButton = new CustomButton(centerX, startY + spacing, buttonWidth, buttonHeight, "CHARACTER SHOP", 
+            Color.rgb(255, 165, 0));
+        shopButton.setOnClick(this::handleShop);
+        
+        profileButton = new CustomButton(centerX, startY + spacing * 2, buttonWidth, buttonHeight, "PROFILE", 
+            Color.rgb(70, 130, 220));
+        profileButton.setOnClick(this::handleProfile);
+        
+        logoutButton = new CustomButton(centerX, startY + spacing * 3, buttonWidth, buttonHeight, "LOGOUT", 
+            Color.rgb(200, 70, 70));
+        logoutButton.setOnClick(this::handleLogout);
+    }
+    
+    private void render() {
+        time += 0.05;
+        
+        // AUTO-DETECT: Pakai gambar opening kalau ada, kalau tidak pakai gradient
+        if (backgroundImage != null && !backgroundImage.isError() && backgroundImage.getProgress() >= 1.0) {
+            gc.drawImage(backgroundImage, 0, 0, width, height);
+        } else {
+            LinearGradient skyGradient = VisualEffects.createSkyGradient(height);
+            gc.setFill(skyGradient);
+            gc.fillRect(0, 0, width, height);
+            
+            for (VisualEffects.Star star : stars) {
+                star.draw(gc, time);
+            }
+        }
+        
+        // Clouds hanya muncul kalau tidak ada background image
+        if (backgroundImage == null) {
+            for (VisualEffects.Star star : stars) {
+                star.draw(gc, time);
+            }
+        
+        for (VisualEffects.Cloud cloud : clouds) {
+            cloud.update();
+            cloud.draw(gc);
+        }
+        
+        particles.removeIf(p -> !p.isAlive());
+        for (VisualEffects.Particle p : particles) {
+            p.update();
+            p.draw(gc);
+        }
+        
+        if (random.nextInt(100) < 5) {
+            particles.add(new VisualEffects.Particle(
+                random.nextDouble() * width, 
+                random.nextDouble() * height, 
+                Color.rgb(255, 215, 0, 0.8)
+            ));
+        }
+        
+        if (showingIntro) {
+            renderIntro();
+        } else {
+            renderMenu();
+        }
+    }
+    
+    private void renderMenu() {
+        titlePulse += 0.05;
+        double scale = 1.0 + Math.sin(titlePulse) * 0.08;
+        
+        Font titleFont = Font.font("Arial", FontWeight.BOLD, 60 * scale);
+        VisualEffects.drawGlowText(gc, "SUPER ADVENTURE HERO", 100, 120, 
+            titleFont, Color.rgb(255, 215, 0), Color.rgb(255, 140, 0, 0.6));
+        
+        Font subtitleFont = Font.font("Arial", FontWeight.NORMAL, 22);
+        gc.setFill(Color.rgb(255, 255, 255));
+        gc.setFont(subtitleFont);
+        gc.fillText("Player: " + playerData.getUsername(), 50, 170);
+        
+        Font coinFont = Font.font("Arial", FontWeight.BOLD, 28);
+        VisualEffects.drawGlowText(gc, "Coins: " + playerData.getTotalCoins(), 50, 200, 
+            coinFont, Color.rgb(255, 215, 0), Color.rgb(255, 140, 0, 0.6));
+        
+        gc.setFill(Color.rgb(255, 255, 255));
+        gc.setFont(Font.font("Arial", FontWeight.NORMAL, 18));
+        gc.fillText("High Score: " + playerData.getHighScore(), 50, 230);
+        gc.fillText("Games Played: " + playerData.getGamesPlayed(), 50, 250);
+        
+        gc.setFill(Color.rgb(50, 50, 80, 0.7));
+        gc.fillRoundRect(250, 290, 700, 340, 30, 30);
+        
+        gc.setStroke(Color.rgb(150, 150, 200));
+        gc.setLineWidth(3);
+        gc.strokeRoundRect(250, 290, 700, 340, 30, 30);
+        
+        playButton.draw(gc);
+        shopButton.draw(gc);
+        profileButton.draw(gc);
+        logoutButton.draw(gc);
+        
+        VisualEffects.drawGlowText(gc, "Created with JavaFX", 460, height - 30, 
+            Font.font("Arial", FontWeight.NORMAL, 18), 
+            Color.rgb(255, 215, 0), Color.rgb(200, 150, 0, 0.5));
+    }
+    
+    private void renderIntro() {
+        gc.setFill(Color.rgb(0, 0, 0, 0.85));
+        gc.fillRect(0, 0, width, height);
+        
+        StoryManager.StorySegment intro = storyManager.getIntro();
+        
+        Font titleFont = Font.font("Arial", FontWeight.BOLD, 52);
+        VisualEffects.drawGlowText(gc, intro.getTitle(), width / 2 - 150, 100, 
+            titleFont, Color.GOLD, Color.rgb(255, 140, 0, 0.7));
+        
+        gc.setFill(Color.rgb(40, 40, 60, 0.8));
+        gc.fillRoundRect(30, 160, width - 60, 420, 25, 25);
+        
+        gc.setStroke(Color.rgb(150, 120, 200));
+        gc.setLineWidth(2);
+        gc.strokeRoundRect(30, 160, width - 60, 420, 25, 25);
+        
+        gc.setFill(Color.rgb(230, 230, 250));
+        gc.setFont(Font.font("Arial", FontWeight.NORMAL, 22));
+        
+        String[] lines = intro.getText().split("\n");
+        int yPos = 220;
+        for (String line : lines) {
+            gc.fillText(line, 70, yPos);
+            yPos += 45;
+        }
+        
+        Font promptFont = Font.font("Arial", FontWeight.BOLD, 26);
+        double pulse = Math.abs(Math.sin(time * 2));
+        VisualEffects.drawGlowText(gc, "Press ENTER to begin your adventure...", 250, height - 60, 
+            promptFont, Color.rgb(100, 255, 255), Color.rgb(50, 200, 255, pulse));
+    }
+    
+    private void handlePlay() {
+        if (!showingIntro) {
+            showingIntro = true;
+        }
+    }
+    
+    private void handleShop() {
+        menuLoop.stop();
+        CharacterShop shop = new CharacterShop(stage, width, height, playerData, this);
+        Scene shopScene = new Scene(shop.getRoot(), width, height);
+        stage.setScene(shopScene);
+        shopScene.getRoot().requestFocus();
+    }
+    
+    private void handleProfile() {
+        System.out.println("=== PLAYER PROFILE ===");
+        System.out.println("Username: " + playerData.getUsername());
+        System.out.println("Total Coins: " + playerData.getTotalCoins());
+        System.out.println("High Score: " + playerData.getHighScore());
+        System.out.println("Games Played: " + playerData.getGamesPlayed());
+        System.out.println("Owned Characters: " + playerData.getOwnedCharacters());
+        System.out.println("Current Character: " + playerData.getCurrentCharacter());
+    }
+    
+    private void handleLogout() {
+        playerData.save();
+        menuLoop.stop();
+        LoginScreen loginScreen = new LoginScreen(stage, width, height);
+        Scene loginScene = new Scene(loginScreen.getRoot(), width, height);
+        stage.setScene(loginScene);
+        loginScene.getRoot().requestFocus();
+    }
+    
+    private void startGame() {
+        menuLoop.stop();
+        GameController gameController = new GameController(stage, width, height, playerData);
+        gameController.setMainMenuScreen(this);
+        Scene gameScene = new Scene(gameController.getRoot(), width, height);
+        stage.setScene(gameScene);
+        gameScene.getRoot().requestFocus();
+        gameController.start();
+    }
+    
+    public void returnToMenu() {
+        menuLoop.start();
+        Scene menuScene = new Scene(getRoot(), width, height);
+        stage.setScene(menuScene);
+        menuScene.getRoot().requestFocus();
+    }
+    
+    public Parent getRoot() {
+        root = new Pane();
+        root.getChildren().add(canvas);
+        root.setFocusTraversable(true);
+        
+        root.setOnMouseMoved(e -> {
+            if (!showingIntro) {
+                playButton.checkHover(e.getX(), e.getY());
+                shopButton.checkHover(e.getX(), e.getY());
+                profileButton.checkHover(e.getX(), e.getY());
+                logoutButton.checkHover(e.getX(), e.getY());
+            }
+        });
+        
+        root.setOnMouseClicked(e -> {
+            if (!showingIntro) {
+                playButton.handleClick(e.getX(), e.getY());
+                shopButton.handleClick(e.getX(), e.getY());
+                profileButton.handleClick(e.getX(), e.getY());
+                logoutButton.handleClick(e.getX(), e.getY());
+            }
+        });
+        
+        root.setOnKeyPressed(e -> {
+            if (e.getCode() == javafx.scene.input.KeyCode.ENTER && showingIntro) {
+                startGame();
+            }
+        });
+        
+        return root;
+    }
+}
+
+
+

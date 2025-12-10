@@ -1,0 +1,63 @@
+package com.game.mario;
+
+import javafx.scene.canvas.GraphicsContext;
+import javafx.scene.paint.Color;
+
+public class Enemy {
+    private double x, y;
+    private double velocityX;
+    private double width = 35;
+    private double height = 35;
+    private boolean alive = true;
+    private double moveSpeed = 1.5;
+    private double minX, maxX;
+    
+    public Enemy(double startX, double startY, double minX, double maxX) {
+        this.x = startX;
+        this.y = startY;
+        this.minX = minX;
+        this.maxX = maxX;
+        this.velocityX = -moveSpeed;
+    }
+    
+    public void update() {
+        if (!alive) return;
+        
+        x += velocityX;
+        
+        if (x <= minX) {
+            x = minX;
+            velocityX = moveSpeed;
+        } else if (x >= maxX) {
+            x = maxX;
+            velocityX = -moveSpeed;
+        }
+    }
+    
+    public void draw(GraphicsContext gc) {
+        if (!alive) return;
+        
+        gc.setFill(Color.DARKGREEN);
+        gc.fillRect(x, y, width, height);
+        
+        gc.setFill(Color.YELLOW);
+        gc.fillRect(x + 5, y + 5, 6, 6);
+        gc.fillRect(x + 24, y + 5, 6, 6);
+        
+        gc.setFill(Color.BLACK);
+        gc.fillRect(x + 10, y + 20, 15, 3);
+    }
+    
+    public void kill() {
+        alive = false;
+    }
+    
+    public boolean isAlive() {
+        return alive;
+    }
+    
+    public double getX() { return x; }
+    public double getY() { return y; }
+    public double getWidth() { return width; }
+    public double getHeight() { return height; }
+}

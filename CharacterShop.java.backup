@@ -1,0 +1,306 @@
+﻿package com.game.mario;
+
+import javafx.scene.Parent;
+import javafx.scene.canvas.Canvas;
+import javafx.scene.canvas.GraphicsContext;
+import javafx.scene.layout.Pane;
+import javafx.scene.paint.Color;
+import javafx.scene.paint.LinearGradient;
+import javafx.scene.text.Font;
+import javafx.scene.text.FontWeight;
+import javafx.stage.Stage;
+import javafx.scene.Scene;
+import javafx.animation.AnimationTimer;
+import javafx.scene.control.Alert;
+import javafx.scene.control.Alert.AlertType;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Random;
+
+public class CharacterShop {
+    
+    public static class CharacterItem {
+        String name;
+        String description;
+        int price;
+        Color color;
+        
+        public CharacterItem(String name, String description, int price, Color color) {
+            this.name = name;
+            this.description = description;
+            this.price = price;
+            this.color = color;
+        }
+    }
+    
+    private Canvas canvas;
+    private GraphicsContext gc;
+    private Stage stage;
+    private int width, height;
+    private PlayerData playerData;
+    private MainMenuScreen mainMenuScreen;
+    private AnimationTimer shopLoop;
+    private double time = 0;
+    private List<VisualEffects.Star> stars;
+    private List<VisualEffects.Cloud> clouds;
+    private Random random = new Random();
+    
+    private List<CharacterItem> characters;
+    private List<CustomButton> buyButtons;
+    private CustomButton backButton;
+    
+    private Pane root;
+    private ImageManager imageManager;
+    private javafx.scene.image.Image backgroundImage;
+    
+    public CharacterShop(Stage stage, int width, int height, PlayerData playerData, MainMenuScreen mainMenuScreen) {
+        this.stage = stage;
+        this.width = width;
+        this.height = height;
+        this.playerData = playerData;
+        this.mainMenuScreen = mainMenuScreen;
+        this.canvas = new Canvas(width, height);
+        this.gc = canvas.getGraphicsContext2D();
+        this.imageManager = ImageManager.getInstance();
+        this.backgroundImage = imageManager.getImage("ui/opening_background");
+        
+        initParticles();
+        initCharacters();
+        initButtons();
+        
+        shopLoop = new AnimationTimer() {
+            @Override
+            public void handle(long now) {
+                render();
+            }
+        };
+        shopLoop.start();
+    }
+    
+    private void initParticles() {
+        stars = new ArrayList<>();
+        for (int i = 0; i < 100; i++) {
+            stars.add(new VisualEffects.Star(random.nextDouble() * width, random.nextDouble() * height));
+        }
+        
+        clouds = new ArrayList<>();
+        for (int i = 0; i < 4; i++) {
+            clouds.add(new VisualEffects.Cloud(random.nextDouble() * width, 30 + random.nextDouble() * 80, width));
+        }
+    }
+    
+    private void initCharacters() {
+        characters = new ArrayList<>();
+        characters.add(new CharacterItem("HERO", "The default brave hero", 0, Color.rgb(255, 100, 100)));
+        characters.add(new CharacterItem("KNIGHT", "A strong armored knight", 100, Color.rgb(150, 150, 200)));
+        characters.add(new CharacterItem("NINJA", "A fast and agile ninja", 200, Color.rgb(50, 50, 50)));
+        characters.add(new CharacterItem("WIZARD", "A magical wizard with special powers", 300, Color.rgb(150, 50, 200)));
+        characters.add(new CharacterItem("DRAGON", "A powerful dragon character", 500, Color.rgb(255, 50, 50)));
+    }
+    
+    private void initButtons() {
+        buyButtons = new ArrayList<>();
+        
+        double cardWidth = 200;
+        double cardHeight = 250;
+        double buttonWidth = 150;
+        double buttonHeight = 40;
+        double startX = 60;
+        double startY = 200;
+        double spacing = 230;
+        
+        for (int i = 0; i < characters.size(); i++) {
+            CharacterItem character = characters.get(i);
+            double x = startX + (i * spacing);
+            double buttonY = startY + cardHeight - 50;
+            
+            CustomButton buyButton = new CustomButton(x + 25, buttonY, buttonWidth, buttonHeight, "BUY", 
+                Color.rgb(70, 180, 100));
+            
+            final int index = i;
+            buyButton.setOnClick(() -> handleBuyCharacter(index));
+            
+            if (playerData.ownsCharacter(character.name)) {
+                buyButton.setEnabled(false);
+            }
+            
+            buyButtons.add(buyButton);
+        }
+        
+        backButton = new CustomButton(width - 220, height - 80, 200, 50, "BACK TO MENU", 
+            Color.rgb(70, 130, 220));
+        backButton.setOnClick(this::goBackToMenu);
+    }
+    
+    private void render() {
+        time += 0.05;
+        
+        // AUTO-DETECT: Pakai gambar opening kalau ada, kalau tidak pakai gradient
+        if (backgroundImage != null && !backgroundImage.isError() && backgroundImage.getProgress() >= 1.0) {
+            gc.drawImage(backgroundImage, 0, 0, width, height);
+        } else {
+            LinearGradient skyGradient = VisualEffects.createSkyGradient(height);
+            gc.setFill(skyGradient);
+            gc.fillRect(0, 0, width, height);
+            
+            for (VisualEffects.Star star : stars) {
+                star.draw(gc, time);
+            }
+        }
+        
+        // Clouds hanya muncul kalau tidak ada background image
+        if (backgroundImage == null) {
+            for (VisualEffects.Star star : stars) {
+                star.draw(gc, time);
+            }
+        
+        for (VisualEffects.Cloud cloud : clouds) {
+            cloud.update();
+            cloud.draw(gc);
+        }
+        
+        Font titleFont = Font.font("Arial", FontWeight.BOLD, 50);
+        VisualEffects.drawGlowText(gc, "CHARACTER SHOP", 380, 80, 
+            titleFont, Color.rgb(255, 215, 0), Color.rgb(255, 140, 0, 0.6));
+        
+        Font coinFont = Font.font("Arial", FontWeight.BOLD, 28);
+        VisualEffects.drawGlowText(gc, "Your Coins: " + playerData.getTotalCoins(), 50, 130, 
+            coinFont, Color.rgb(255, 215, 0), Color.rgb(255, 140, 0, 0.6));
+        
+        double cardWidth = 200;
+        double cardHeight = 250;
+        double startX = 60;
+        double startY = 200;
+        double spacing = 230;
+        
+        for (int i = 0; i < characters.size(); i++) {
+            CharacterItem character = characters.get(i);
+            double x = startX + (i * spacing);
+            
+            boolean owned = playerData.ownsCharacter(character.name);
+            
+            gc.setFill(owned ? Color.rgb(50, 80, 50, 0.7) : Color.rgb(50, 50, 80, 0.7));
+            gc.fillRoundRect(x, startY, cardWidth, cardHeight, 15, 15);
+            
+            gc.setStroke(owned ? Color.rgb(100, 200, 100) : Color.rgb(150, 150, 200));
+            gc.setLineWidth(2);
+            gc.strokeRoundRect(x, startY, cardWidth, cardHeight, 15, 15);
+            
+            gc.setFill(character.color);
+            gc.fillOval(x + 50, startY + 20, 100, 100);
+            
+            gc.setFill(Color.WHITE);
+            gc.setFont(Font.font("Arial", FontWeight.BOLD, 20));
+            gc.fillText(character.name, x + 50, startY + 145);
+            
+            gc.setFont(Font.font("Arial", FontWeight.NORMAL, 14));
+            String[] descLines = wrapText(character.description, 18);
+            int yPos = (int)(startY + 165);
+            for (String line : descLines) {
+                gc.fillText(line, x + 10, yPos);
+                yPos += 18;
+            }
+            
+            if (owned) {
+                gc.setFill(Color.rgb(100, 255, 100));
+                gc.setFont(Font.font("Arial", FontWeight.BOLD, 16));
+                gc.fillText("OWNED", x + 60, startY + cardHeight - 60);
+            } else {
+                Font priceFont = Font.font("Arial", FontWeight.BOLD, 18);
+                VisualEffects.drawGlowText(gc, character.price + " Coins", x + 45, startY + cardHeight - 60, 
+                    priceFont, Color.rgb(255, 215, 0), Color.rgb(255, 140, 0, 0.6));
+            }
+            
+            if (!owned) {
+                buyButtons.get(i).draw(gc);
+            }
+        }
+        
+        backButton.draw(gc);
+    }
+    
+    private String[] wrapText(String text, int maxChars) {
+        List<String> lines = new ArrayList<>();
+        String[] words = text.split(" ");
+        StringBuilder currentLine = new StringBuilder();
+        
+        for (String word : words) {
+            if (currentLine.length() + word.length() + 1 > maxChars) {
+                lines.add(currentLine.toString());
+                currentLine = new StringBuilder(word);
+            } else {
+                if (currentLine.length() > 0) currentLine.append(" ");
+                currentLine.append(word);
+            }
+        }
+        if (currentLine.length() > 0) {
+            lines.add(currentLine.toString());
+        }
+        
+        return lines.toArray(new String[0]);
+    }
+    
+    private void handleBuyCharacter(int index) {
+        CharacterItem character = characters.get(index);
+        
+        if (playerData.ownsCharacter(character.name)) {
+            showAlert("Already Owned", "You already own this character!");
+            return;
+        }
+        
+        if (playerData.getTotalCoins() >= character.price) {
+            playerData.spendCoins(character.price);
+            playerData.unlockCharacter(character.name);
+            playerData.save();
+            
+            buyButtons.get(index).setEnabled(false);
+            
+            showAlert("Purchase Successful", 
+                "You have successfully purchased " + character.name + "!\n" +
+                "Remaining coins: " + playerData.getTotalCoins());
+        } else {
+            showAlert("Insufficient Coins", 
+                "You need " + character.price + " coins to buy this character.\n" +
+                "You have: " + playerData.getTotalCoins() + " coins.\n" +
+                "Play more games to earn coins!");
+        }
+    }
+    
+    private void showAlert(String title, String message) {
+        Alert alert = new Alert(AlertType.INFORMATION);
+        alert.setTitle(title);
+        alert.setHeaderText(null);
+        alert.setContentText(message);
+        alert.showAndWait();
+    }
+    
+    private void goBackToMenu() {
+        shopLoop.stop();
+        playerData.save();
+        mainMenuScreen.returnToMenu();
+    }
+    
+    public Parent getRoot() {
+        root = new Pane();
+        root.getChildren().add(canvas);
+        root.setFocusTraversable(true);
+        
+        root.setOnMouseMoved(e -> {
+            for (CustomButton button : buyButtons) {
+                button.checkHover(e.getX(), e.getY());
+            }
+            backButton.checkHover(e.getX(), e.getY());
+        });
+        
+        root.setOnMouseClicked(e -> {
+            for (CustomButton button : buyButtons) {
+                button.handleClick(e.getX(), e.getY());
+            }
+            backButton.handleClick(e.getX(), e.getY());
+        });
+        
+        return root;
+    }
+}
+
+

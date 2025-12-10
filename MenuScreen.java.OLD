@@ -1,0 +1,211 @@
+package com.game.mario;
+
+import javafx.scene.Parent;
+import javafx.scene.canvas.Canvas;
+import javafx.scene.canvas.GraphicsContext;
+import javafx.scene.input.KeyCode;
+import javafx.scene.layout.Pane;
+import javafx.scene.paint.Color;
+import javafx.scene.paint.LinearGradient;
+import javafx.scene.text.Font;
+import javafx.scene.text.FontWeight;
+import javafx.stage.Stage;
+import javafx.scene.Scene;
+import javafx.animation.AnimationTimer;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Random;
+
+public class MenuScreen {
+    private Canvas canvas;
+    private GraphicsContext gc;
+    private Stage stage;
+    private int width, height;
+    private StoryManager storyManager;
+    private boolean showingIntro = false;
+    private AnimationTimer menuLoop;
+    private double titlePulse = 0;
+    private List<VisualEffects.Star> stars;
+    private List<VisualEffects.Cloud> clouds;
+    private List<VisualEffects.Particle> particles;
+    private Random random = new Random();
+    private double time = 0;
+    private PlayerData playerData;
+    
+    public MenuScreen(Stage stage, int width, int height) {
+        this(stage, width, height, null);
+    }
+    
+    public MenuScreen(Stage stage, int width, int height, PlayerData playerData) {
+        this.stage = stage;
+        this.width = width;
+        this.height = height;
+        this.playerData = playerData;
+        this.canvas = new Canvas(width, height);
+        this.gc = canvas.getGraphicsContext2D();
+        this.storyManager = new StoryManager();
+        
+        initParticles();
+        
+        menuLoop = new AnimationTimer() {
+            @Override
+            public void handle(long now) {
+                render();
+            }
+        };
+        menuLoop.start();
+    }
+    
+    private void initParticles() {
+        stars = new ArrayList<>();
+        for (int i = 0; i < 150; i++) {
+            stars.add(new VisualEffects.Star(random.nextDouble() * width, random.nextDouble() * height));
+        }
+        
+        clouds = new ArrayList<>();
+        for (int i = 0; i < 6; i++) {
+            clouds.add(new VisualEffects.Cloud(random.nextDouble() * width, 30 + random.nextDouble() * 120, width));
+        }
+        
+        particles = new ArrayList<>();
+    }
+    
+    private void render() {
+        time += 0.05;
+        
+        LinearGradient skyGradient = VisualEffects.createSkyGradient(height);
+        gc.setFill(skyGradient);
+        gc.fillRect(0, 0, width, height);
+        
+        for (VisualEffects.Star star : stars) {
+            star.draw(gc, time);
+        }
+        
+        for (VisualEffects.Cloud cloud : clouds) {
+            cloud.update();
+            cloud.draw(gc);
+        }
+        
+        particles.removeIf(p -> !p.isAlive());
+        for (VisualEffects.Particle p : particles) {
+            p.update();
+            p.draw(gc);
+        }
+        
+        if (random.nextInt(100) < 5) {
+            particles.add(new VisualEffects.Particle(
+                random.nextDouble() * width, 
+                random.nextDouble() * height, 
+                Color.rgb(255, 215, 0, 0.8)
+            ));
+        }
+        
+        if (showingIntro) {
+            renderIntro();
+        } else {
+            renderMenu();
+        }
+    }
+    
+    private void renderMenu() {
+        titlePulse += 0.05;
+        double scale = 1.0 + Math.sin(titlePulse) * 0.08;
+        
+        Font titleFont = Font.font("Arial", FontWeight.BOLD, 60 * scale);
+        VisualEffects.drawGlowText(gc, "SUPER ADVENTURE HERO", 100, 150, 
+            titleFont, Color.rgb(255, 215, 0), Color.rgb(255, 140, 0, 0.6));
+        
+        Font subtitleFont = Font.font("Arial", FontWeight.NORMAL, 28);
+        VisualEffects.drawGlowText(gc, "A Platformer Adventure", 380, 210, 
+            subtitleFont, Color.rgb(230, 230, 250), Color.rgb(100, 100, 200, 0.5));
+        
+        gc.setFill(Color.rgb(50, 50, 80, 0.7));
+        gc.fillRoundRect(300, 280, 600, 280, 30, 30);
+        
+        gc.setStroke(Color.rgb(150, 150, 200));
+        gc.setLineWidth(3);
+        gc.strokeRoundRect(300, 280, 600, 280, 30, 30);
+        
+        Font promptFont = Font.font("Arial", FontWeight.BOLD, 36);
+        double promptPulse = Math.abs(Math.sin(titlePulse * 1.5));
+        Color promptColor = Color.rgb(100, 255, 255, 0.5 + promptPulse * 0.5);
+        VisualEffects.drawGlowText(gc, "Press ENTER to Start", 380, 340, 
+            promptFont, Color.CYAN, promptColor);
+        
+        gc.setFill(Color.rgb(220, 220, 240));
+        gc.setFont(Font.font("Arial", FontWeight.BOLD, 22));
+        gc.fillText("Controls:", 480, 400);
+        
+        gc.setFill(Color.rgb(200, 200, 255));
+        gc.setFont(Font.font("Arial", FontWeight.NORMAL, 20));
+        gc.fillText("Arrow Keys - Move Left/Right", 380, 435);
+        gc.fillText("Space - Jump", 480, 465);
+        gc.fillText("ESC - Return to Menu", 450, 495);
+        
+        VisualEffects.drawGlowText(gc, "Created with JavaFX", 460, height - 30, 
+            Font.font("Arial", FontWeight.NORMAL, 18), 
+            Color.rgb(255, 215, 0), Color.rgb(200, 150, 0, 0.5));
+    }
+    
+    private void renderIntro() {
+        gc.setFill(Color.rgb(0, 0, 0, 0.85));
+        gc.fillRect(0, 0, width, height);
+        
+        StoryManager.StorySegment intro = storyManager.getIntro();
+        
+        Font titleFont = Font.font("Arial", FontWeight.BOLD, 52);
+        VisualEffects.drawGlowText(gc, intro.getTitle(), width / 2 - 150, 100, 
+            titleFont, Color.GOLD, Color.rgb(255, 140, 0, 0.7));
+        
+        gc.setFill(Color.rgb(40, 40, 60, 0.8));
+        gc.fillRoundRect(30, 160, width - 60, 420, 25, 25);
+        
+        gc.setStroke(Color.rgb(150, 120, 200));
+        gc.setLineWidth(2);
+        gc.strokeRoundRect(30, 160, width - 60, 420, 25, 25);
+        
+        gc.setFill(Color.rgb(230, 230, 250));
+        gc.setFont(Font.font("Arial", FontWeight.NORMAL, 22));
+        
+        String[] lines = intro.getText().split("\n");
+        int yPos = 220;
+        for (String line : lines) {
+            gc.fillText(line, 70, yPos);
+            yPos += 45;
+        }
+        
+        Font promptFont = Font.font("Arial", FontWeight.BOLD, 26);
+        double pulse = Math.abs(Math.sin(time * 2));
+        VisualEffects.drawGlowText(gc, "Press ENTER to begin your adventure...", 250, height - 60, 
+            promptFont, Color.rgb(100, 255, 255), Color.rgb(50, 200, 255, pulse));
+    }
+    
+    private void startGame() {
+        menuLoop.stop();
+        PlayerData gamePlayerData = (playerData != null) ? playerData : new PlayerData("Guest");
+        System.out.println("Starting game with: " + gamePlayerData.getUsername() + ", Coins: " + gamePlayerData.getTotalCoins());
+        GameController gameController = new GameController(stage, width, height, gamePlayerData);
+        Scene gameScene = new Scene(gameController.getRoot(), width, height);
+        stage.setScene(gameScene);
+        gameScene.getRoot().requestFocus();
+        gameController.start();
+    }
+    
+    public Parent getRoot() {
+        Pane root = new Pane();
+        root.getChildren().add(canvas);
+        root.setFocusTraversable(true);
+        
+        root.setOnKeyPressed(e -> {
+            if (e.getCode() == KeyCode.ENTER) {
+                if (showingIntro) {
+                    startGame();
+                } else {
+                    showingIntro = true;
+                }
+            }
+        });
+        
+        return root;
+    }
+}
